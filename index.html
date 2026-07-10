@@ -3,14 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#7C2D28">
-<meta name="description" content="اپ شخصی برای نوشتن و مطالعه نوشته‌هایتان مثل یک کتاب واقعی">
 <title>کتاب من</title>
 <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#7C2D28">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Amiri:ital@0;1&family=Aref+Ruqaa:wght@400;700&family=Vazirmatn:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:ital@0;1&family=Aref+Ruqaa:wght@400;700&family=Vazirmatn:wght@400;500;600&family=Noto+Naskh+Arabic:wght@400;500;700&family=Markazi+Text:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --paper: #F1E7D0;
@@ -302,13 +301,15 @@
       <label>فونت متن</label>
       <div class="opt-row" id="fontOptRow">
         <button class="opt-chip" data-font="Amiri" onclick="setFont('Amiri')" style="font-family:Amiri,serif;">سنتی (امیری)</button>
+        <button class="opt-chip" data-font="NotoNaskh" onclick="setFont('NotoNaskh')" style="font-family:'Noto Naskh Arabic',serif;">نسخ کلاسیک</button>
+        <button class="opt-chip" data-font="Markazi" onclick="setFont('Markazi')" style="font-family:'Markazi Text',serif;">مرکزی</button>
         <button class="opt-chip" data-font="Vazirmatn" onclick="setFont('Vazirmatn')" style="font-family:Vazirmatn,sans-serif;">مدرن (وزیرمتن)</button>
       </div>
     </div>
 
     <div class="sheet-group">
       <label>اندازه قلم: <span id="fontSizeLabel">۲۰</span></label>
-      <input type="range" id="fontSizeRange" min="14" max="30" step="1" oninput="setFontSize(this.value)">
+      <input type="range" id="fontSizeRange" min="14" max="36" step="1" oninput="setFontSize(this.value)">
     </div>
 
     <div class="sheet-group">
@@ -460,7 +461,13 @@ let readingTheme = DATA.settings.theme;
 function applySettingsToRoot(){
   document.documentElement.style.setProperty('--font-size', DATA.settings.fontSize+'px');
   document.documentElement.style.setProperty('--line-height', (DATA.settings.lineHeight/100));
-  document.documentElement.style.setProperty('--body-font', DATA.settings.font==='Amiri' ? "'Amiri','Noto Naskh Arabic',serif" : "'Vazirmatn','Tahoma',sans-serif");
+  document.documentElement.style.setProperty('--body-font', fontStackFor(DATA.settings.font));
+}
+function fontStackFor(key){
+  if(key==='Amiri') return "'Amiri','Noto Naskh Arabic',serif";
+  if(key==='NotoNaskh') return "'Noto Naskh Arabic','Amiri',serif";
+  if(key==='Markazi') return "'Markazi Text','Amiri',serif";
+  return "'Vazirmatn','Tahoma',sans-serif";
 }
 
 function themeColors(theme){
@@ -484,7 +491,7 @@ function paginateAll(){
   measurer.style.position='absolute';
   measurer.style.visibility='hidden';
   measurer.style.width = pageWidth+'px';
-  measurer.style.fontFamily = DATA.settings.font==='Amiri' ? "'Amiri','Noto Naskh Arabic',serif" : "'Vazirmatn','Tahoma',sans-serif";
+  measurer.style.fontFamily = fontStackFor(DATA.settings.font);
   measurer.style.fontSize = DATA.settings.fontSize+'px';
   measurer.style.lineHeight = (DATA.settings.lineHeight/100);
   measurer.style.whiteSpace = 'pre-wrap';
@@ -527,16 +534,25 @@ function startReading(){
     return;
   }
   showScreen('reading');
-  setTimeout(()=>{
-    paginateAll();
-    if(DATA.bookmark && DATA.bookmark.pageIndex < pages.length){
-      currentPageIndex = DATA.bookmark.pageIndex;
-    } else {
-      currentPageIndex = 0;
-    }
-    setTheme(DATA.settings.theme, true);
-    renderCurrentPage();
-  }, 30);
+  const doPaginate = ()=>{
+    setTimeout(()=>{
+      paginateAll();
+      if(DATA.bookmark && DATA.bookmark.pageIndex < pages.length){
+        currentPageIndex = DATA.bookmark.pageIndex;
+      } else {
+        currentPageIndex = 0;
+      }
+      setTheme(DATA.settings.theme, true);
+      renderCurrentPage();
+    }, 60);
+  };
+  if(document.fonts && document.fonts.ready){
+    const fontsPromise = document.fonts.ready.catch(()=>{});
+    const timeoutPromise = new Promise(resolve=>setTimeout(resolve, 1200));
+    Promise.race([fontsPromise, timeoutPromise]).then(doPaginate);
+  } else {
+    doPaginate();
+  }
 }
 
 function exitReading(){
@@ -694,10 +710,9 @@ function setLineHeight(v){
 /* ---------------- init ---------------- */
 setTheme(DATA.settings.theme, true);
 renderLibrary();
-
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
   });
 }
 window.addEventListener('resize', ()=>{
