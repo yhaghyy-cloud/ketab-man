@@ -1,0 +1,33 @@
+{
+  "name": "کتاب من",
+  "short_name": "کتاب من",
+  "description": "اپ شخصی برای نوشتن و مطالعه نوشته‌هایتان مثل یک کتاب واقعی، با قابلیت ورق زدن و تنظیم فونت و رنگ.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#221A12",
+  "theme_color": "#7C2D28",
+  "lang": "fa",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

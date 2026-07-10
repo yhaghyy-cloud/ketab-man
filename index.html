@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#7C2D28">
+<meta name="description" content="اپ شخصی برای نوشتن و مطالعه نوشته‌هایتان مثل یک کتاب واقعی">
+<title>کتاب من</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Amiri:ital@0;1&family=Aref+Ruqaa:wght@400;700&family=Vazirmatn:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #F1E7D0;
+    --paper-2: #E9DBBB;
+    --ink: #3B2A1D;
+    --ink-soft: #6b5636;
+    --leather: #7C2D28;
+    --gold: #B08948;
+    --night-bg: #221A12;
+    --night-paper: #2C2114;
+    --night-ink: #E7D9B8;
+    --ui-font: 'Vazirmatn', 'Tahoma', sans-serif;
+    --body-font: 'Amiri', 'Noto Naskh Arabic', serif;
+    --title-font: 'Aref Ruqaa', 'Amiri', serif;
+    --font-size: 20px;
+    --line-height: 2.1;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background:var(--night-bg);
+    font-family:var(--ui-font);
+    color:var(--ink);
+  }
+  #app{position:fixed; inset:0; overflow:hidden;}
+
+  /* ---------- shared ---------- */
+  .screen{position:absolute; inset:0; display:none; flex-direction:column;}
+  .screen.active{display:flex;}
+  button{font-family:inherit; cursor:pointer; border:none; background:none;}
+  .icon-btn{
+    width:42px; height:42px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--paper); background:rgba(255,255,255,0.08);
+    font-size:20px;
+  }
+  .icon-btn:active{background:rgba(255,255,255,0.18);}
+
+  /* ---------- library screen ---------- */
+  #library{background: linear-gradient(180deg, #1c150e, #241a10 60%, #1c150e);}
+  .lib-header{
+    padding:22px 20px 14px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .lib-header h1{
+    font-family:var(--title-font); color:var(--gold); font-size:30px; margin:0; font-weight:700;
+    letter-spacing:0.5px;
+  }
+  .lib-header .sub{color:#c7b48a; font-size:12.5px; margin-top:2px; font-family:var(--ui-font);}
+  .lib-list{flex:1; overflow-y:auto; padding:8px 16px 100px;}
+  .chapter-card{
+    background: linear-gradient(135deg, #FBF3DD, #F1E3C4);
+    border-radius:10px; padding:16px 18px; margin-bottom:12px;
+    display:flex; align-items:center; gap:14px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(176,137,72,0.35);
+    border-right:5px solid var(--leather);
+  }
+  .chapter-num{
+    font-family:var(--title-font); font-size:26px; color:var(--leather); min-width:34px; text-align:center; font-weight:700;
+  }
+  .chapter-info{flex:1; min-width:0;}
+  .chapter-info .t{font-family:var(--title-font); font-size:18px; color:var(--ink); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .chapter-info .p{font-size:12.5px; color:var(--ink-soft); margin-top:3px; font-family:var(--ui-font);}
+  .chapter-actions{display:flex; gap:6px;}
+  .mini-btn{width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--ink-soft); font-size:15px;}
+  .mini-btn:active{background:rgba(0,0,0,0.08);}
+  .empty-state{
+    margin:60px 24px; text-align:center; color:#c7b48a; font-family:var(--ui-font);
+  }
+  .empty-state .big{font-size:44px; margin-bottom:10px;}
+  .empty-state h3{font-family:var(--title-font); color:var(--gold); font-size:20px; margin:8px 0 6px;}
+  .empty-state p{font-size:13.5px; line-height:1.8; opacity:0.85;}
+
+  .fab-row{position:absolute; bottom:22px; left:0; right:0; display:flex; justify-content:center; gap:12px; padding:0 20px;}
+  .fab{
+    flex:1; max-width:220px; padding:14px 10px; border-radius:30px;
+    font-family:var(--ui-font); font-weight:600; font-size:15px;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .fab.primary{background: linear-gradient(135deg, var(--leather), #5f221e); color:#f5e9d3; box-shadow:0 4px 14px rgba(124,45,40,0.55);}
+  .fab.secondary{background:rgba(255,255,255,0.08); color:var(--gold); border:1px solid rgba(176,137,72,0.4);}
+
+  /* ---------- editor screen ---------- */
+  #editor{background:var(--night-bg);}
+  .editor-header{
+    padding:16px 16px 12px; display:flex; align-items:center; gap:12px;
+    border-bottom:1px solid rgba(176,137,72,0.25);
+  }
+  .editor-header h2{font-family:var(--title-font); color:var(--gold); font-size:19px; margin:0; flex:1;}
+  .save-btn{
+    background:var(--gold); color:#241a10; padding:9px 20px; border-radius:22px;
+    font-weight:600; font-size:14px;
+  }
+  .editor-body{flex:1; overflow-y:auto; padding:18px 16px;}
+  .field-label{color:#c7b48a; font-size:12.5px; margin:0 0 8px 2px; font-family:var(--ui-font);}
+  #chapterTitleInput{
+    width:100%; padding:13px 14px; border-radius:10px; border:1px solid rgba(176,137,72,0.4);
+    background:#2C2114; color:var(--night-ink); font-size:17px; font-family:var(--title-font);
+    margin-bottom:18px;
+  }
+  #chapterContentInput{
+    width:100%; min-height:50vh; padding:14px; border-radius:10px; border:1px solid rgba(176,137,72,0.4);
+    background:#FBF3DD; color:var(--ink); font-size:17px; font-family:var(--body-font); line-height:1.9;
+    resize:vertical;
+  }
+  .hint{color:#8f7c58; font-size:12px; margin-top:10px; line-height:1.7; font-family:var(--ui-font);}
+
+  /* ---------- reading screen ---------- */
+  #reading{background:var(--paper);}
+  #reading.theme-night{background:var(--night-bg);}
+  #reading.theme-sepia{background:#E4D3A8;}
+
+  .read-topbar{
+    position:absolute; top:0; left:0; right:0; z-index:20;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 14px 10px; background:linear-gradient(180deg, rgba(0,0,0,0.55), transparent);
+    transition:opacity .25s, transform .25s;
+  }
+  .read-topbar .chap-title{color:#F1E7D0; font-family:var(--title-font); font-size:15px; max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .ui-hidden{opacity:0; pointer-events:none; transform:translateY(-8px);}
+
+  .book-stage{flex:1; position:relative; overflow:hidden;}
+  .page-layer{
+    position:absolute; inset:10px 14px 46px;
+    border-radius:6px;
+    background:var(--paper-bg, var(--paper));
+    box-shadow:0 6px 24px rgba(0,0,0,0.28);
+    backface-visibility:hidden;
+    transform-style:preserve-3d;
+    padding:26px 22px 20px;
+    overflow:hidden;
+  }
+  .page-layer .page-text{
+    font-family:var(--body-font); color:var(--text-col,var(--ink));
+    font-size:var(--font-size); line-height:var(--line-height);
+    white-space:pre-wrap; word-wrap:break-word;
+  }
+  .page-num{
+    position:absolute; bottom:10px; left:0; right:0; text-align:center;
+    font-family:var(--ui-font); font-size:11.5px; color:var(--ink-soft); opacity:0.7;
+  }
+  .flip-anim{
+    transition:transform 0.55s cubic-bezier(.4,.1,.2,1);
+    transform-origin: right center;
+  }
+  .flip-anim.flip-next{transform:rotateY(-160deg);}
+  .flip-anim.flip-prev{transform-origin:left center;}
+  .flip-anim.flip-prev.flipping{transform:rotateY(160deg);}
+
+  .tap-zone{position:absolute; top:0; bottom:0; width:32%; z-index:15;}
+  .tap-zone.left{left:0;}
+  .tap-zone.right{right:0;}
+  .tap-hint{
+    position:absolute; top:50%; transform:translateY(-50%);
+    color:rgba(59,42,29,0.28); font-size:22px; pointer-events:none;
+  }
+  .tap-zone.left .tap-hint{left:8px;}
+  .tap-zone.right .tap-hint{right:8px;}
+
+  .ribbon{
+    position:absolute; top:0; z-index:18; width:28px; height:60px;
+    right:38px;
+    background:linear-gradient(180deg, var(--leather), #5c221e);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+    box-shadow:0 2px 6px rgba(0,0,0,0.4);
+    display:flex; align-items:flex-start; justify-content:center; padding-top:8px;
+  }
+  .ribbon.active{background:linear-gradient(180deg, var(--gold), #8a6a34);}
+  .ribbon span{color:#f5e9d3; font-size:13px;}
+
+  .read-bottombar{
+    position:absolute; bottom:0; left:0; right:0; z-index:20;
+    display:flex; align-items:center; justify-content:center; gap:16px;
+    padding:10px 14px 14px; background:linear-gradient(0deg, rgba(0,0,0,0.5), transparent);
+    transition:opacity .25s, transform .25s;
+  }
+  .read-bottombar .pg-label{color:#F1E7D0; font-size:12.5px; font-family:var(--ui-font);}
+
+  /* ---------- settings sheet ---------- */
+  .sheet-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:40;
+    display:none; align-items:flex-end;
+  }
+  .sheet-overlay.active{display:flex;}
+  .sheet{
+    width:100%; background:#2C2114; border-radius:20px 20px 0 0;
+    padding:18px 20px 26px; max-height:80vh; overflow-y:auto;
+    box-shadow:0 -8px 30px rgba(0,0,0,0.5);
+  }
+  .sheet h3{font-family:var(--title-font); color:var(--gold); font-size:19px; margin:0 0 16px; text-align:center;}
+  .sheet-group{margin-bottom:20px;}
+  .sheet-group label{display:block; color:#c7b48a; font-size:12.5px; margin-bottom:8px; font-family:var(--ui-font);}
+  .opt-row{display:flex; gap:8px; flex-wrap:wrap;}
+  .opt-chip{
+    padding:9px 14px; border-radius:20px; border:1px solid rgba(176,137,72,0.4);
+    color:var(--night-ink); font-size:13.5px; font-family:var(--ui-font);
+  }
+  .opt-chip.selected{background:var(--gold); color:#241a10; border-color:var(--gold); font-weight:600;}
+  input[type=range]{width:100%; accent-color:var(--gold);}
+  .theme-swatch{
+    width:52px; height:36px; border-radius:8px; border:2px solid transparent; display:flex; align-items:center; justify-content:center; font-size:11px; font-family:var(--ui-font);
+  }
+  .theme-swatch.selected{border-color:var(--gold);}
+
+  /* confirm dialog */
+  .confirm-overlay{position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:50; display:none; align-items:center; justify-content:center;}
+  .confirm-overlay.active{display:flex;}
+  .confirm-box{background:#2C2114; border-radius:14px; padding:22px; width:80%; max-width:320px; text-align:center;}
+  .confirm-box p{color:var(--night-ink); font-family:var(--ui-font); font-size:14.5px; margin:0 0 18px; line-height:1.8;}
+  .confirm-buttons{display:flex; gap:10px;}
+  .confirm-buttons button{flex:1; padding:11px; border-radius:10px; font-family:var(--ui-font); font-size:14px; font-weight:600;}
+  .confirm-buttons .cancel{background:rgba(255,255,255,0.1); color:#e7d9b8;}
+  .confirm-buttons .danger{background:var(--leather); color:#f5e9d3;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- LIBRARY -->
+  <div class="screen active" id="library">
+    <div class="lib-header">
+      <div>
+        <h1>کتاب من</h1>
+        <div class="sub" id="chapCountLabel">۰ فصل</div>
+      </div>
+      <button class="icon-btn" onclick="openSettings()">⚙</button>
+    </div>
+    <div class="lib-list" id="libList"></div>
+    <div class="fab-row">
+      <button class="fab secondary" onclick="openEditor(null)">＋ فصل جدید</button>
+      <button class="fab primary" onclick="startReading()">📖 شروع مطالعه</button>
+    </div>
+  </div>
+
+  <!-- EDITOR -->
+  <div class="screen" id="editor">
+    <div class="editor-header">
+      <button class="icon-btn" onclick="closeEditor()">✕</button>
+      <h2 id="editorHeading">فصل جدید</h2>
+      <button class="save-btn" onclick="saveChapter()">ذخیره</button>
+    </div>
+    <div class="editor-body">
+      <div class="field-label">عنوان فصل</div>
+      <input id="chapterTitleInput" placeholder="مثلاً: فصل اول - آغاز" />
+      <div class="field-label">متن</div>
+      <textarea id="chapterContentInput" placeholder="اینجا بنویسید یا از جای دیگری کپی کرده و پیست کنید…"></textarea>
+      <div class="hint">می‌توانید مستقیم تایپ کنید یا متن را از ورد یا هر جای دیگر کپی و در این‌جا پیست (Paste) کنید.</div>
+    </div>
+  </div>
+
+  <!-- READING -->
+  <div class="screen" id="reading">
+    <div class="read-topbar" id="readTopbar">
+      <button class="icon-btn" onclick="exitReading()">✕</button>
+      <div class="chap-title" id="readChapTitle">—</div>
+      <button class="icon-btn" onclick="openSettings()">⚙</button>
+    </div>
+
+    <div class="book-stage" id="bookStage">
+      <div class="page-layer" id="pageBehind"><div class="page-text" id="pageTextBehind"></div><div class="page-num" id="pageNumBehind"></div></div>
+      <div class="page-layer flip-anim" id="pageFront"><div class="page-text" id="pageTextFront"></div><div class="page-num" id="pageNumFront"></div></div>
+      <div class="ribbon" id="ribbonBtn" onclick="toggleBookmark()"><span>🔖</span></div>
+      <div class="tap-zone right" onclick="prevPage()"><div class="tap-hint">‹</div></div>
+      <div class="tap-zone left" onclick="nextPage()"><div class="tap-hint">›</div></div>
+    </div>
+
+    <div class="read-bottombar" id="readBottombar">
+      <button class="icon-btn" onclick="showChapterList()">☰</button>
+      <div class="pg-label" id="pgLabel">صفحه ۱ از ۱</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- SETTINGS SHEET -->
+<div class="sheet-overlay" id="settingsOverlay" onclick="if(event.target===this) closeSettings()">
+  <div class="sheet">
+    <h3>تنظیمات نمایش</h3>
+
+    <div class="sheet-group">
+      <label>تم رنگی</label>
+      <div class="opt-row">
+        <button class="theme-swatch" data-theme="cream" style="background:#F1E7D0; color:#3B2A1D;" onclick="setTheme('cream')">کرم</button>
+        <button class="theme-swatch" data-theme="sepia" style="background:#E4D3A8; color:#3B2A1D;" onclick="setTheme('sepia')">سپیا</button>
+        <button class="theme-swatch" data-theme="night" style="background:#2C2114; color:#E7D9B8;" onclick="setTheme('night')">شب</button>
+      </div>
+    </div>
+
+    <div class="sheet-group">
+      <label>فونت متن</label>
+      <div class="opt-row" id="fontOptRow">
+        <button class="opt-chip" data-font="Amiri" onclick="setFont('Amiri')" style="font-family:Amiri,serif;">سنتی (امیری)</button>
+        <button class="opt-chip" data-font="Vazirmatn" onclick="setFont('Vazirmatn')" style="font-family:Vazirmatn,sans-serif;">مدرن (وزیرمتن)</button>
+      </div>
+    </div>
+
+    <div class="sheet-group">
+      <label>اندازه قلم: <span id="fontSizeLabel">۲۰</span></label>
+      <input type="range" id="fontSizeRange" min="14" max="30" step="1" oninput="setFontSize(this.value)">
+    </div>
+
+    <div class="sheet-group">
+      <label>فاصله خطوط</label>
+      <input type="range" id="lineHeightRange" min="150" max="260" step="10" oninput="setLineHeight(this.value)">
+    </div>
+
+    <div class="sheet-group">
+      <button class="fab secondary" style="width:100%;" onclick="closeSettings()">بستن</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHAPTER JUMP SHEET -->
+<div class="sheet-overlay" id="chapterListOverlay" onclick="if(event.target===this) closeChapterList()">
+  <div class="sheet">
+    <h3>فهرست فصل‌ها</h3>
+    <div id="jumpList"></div>
+  </div>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <p id="confirmText">مطمئن هستید؟</p>
+    <div class="confirm-buttons">
+      <button class="cancel" onclick="closeConfirm()">انصراف</button>
+      <button class="danger" id="confirmDangerBtn">حذف</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------- Data layer ---------------- */
+const STORAGE_KEY = 'ketabman_data_v1';
+
+function loadData(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return { chapters: [], settings:{theme:'cream', font:'Amiri', fontSize:20, lineHeight:210}, bookmark:null };
+}
+let DATA = loadData();
+
+function persist(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }catch(e){}
+}
+
+function uid(){ return 'c'+Date.now()+Math.floor(Math.random()*1000); }
+
+/* ---------------- Screen switching ---------------- */
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+/* ---------------- Library ---------------- */
+function renderLibrary(){
+  const list = document.getElementById('libList');
+  document.getElementById('chapCountLabel').textContent = DATA.chapters.length + ' فصل';
+  if(DATA.chapters.length===0){
+    list.innerHTML = `<div class="empty-state">
+      <div class="big">📕</div>
+      <h3>هنوز فصلی نداری</h3>
+      <p>با دکمهٔ «فصل جدید» اولین نوشته‌ات را اضافه کن،<br>بعد از دکمهٔ «شروع مطالعه» آن را مثل یک کتاب واقعی بخوان.</p>
+    </div>`;
+    return;
+  }
+  list.innerHTML = DATA.chapters.map((ch,i)=>`
+    <div class="chapter-card">
+      <div class="chapter-num">${toFa(i+1)}</div>
+      <div class="chapter-info">
+        <div class="t">${escapeHtml(ch.title||'بدون عنوان')}</div>
+        <div class="p">${(ch.content||'').replace(/\s+/g,' ').slice(0,40) || 'خالی'}${(ch.content||'').length>40?'…':''}</div>
+      </div>
+      <div class="chapter-actions">
+        <button class="mini-btn" onclick="moveChapter(${i},-1)">▲</button>
+        <button class="mini-btn" onclick="moveChapter(${i},1)">▼</button>
+        <button class="mini-btn" onclick="openEditor('${ch.id}')">✎</button>
+        <button class="mini-btn" onclick="askDeleteChapter('${ch.id}')">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toFa(n){
+  const fa = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+  return String(n).split('').map(d=> fa[d] !== undefined ? fa[d] : d).join('');
+}
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function moveChapter(index, dir){
+  const newIndex = index+dir;
+  if(newIndex<0 || newIndex>=DATA.chapters.length) return;
+  const tmp = DATA.chapters[index];
+  DATA.chapters[index] = DATA.chapters[newIndex];
+  DATA.chapters[newIndex] = tmp;
+  persist();
+  renderLibrary();
+}
+
+let deleteTargetId = null;
+function askDeleteChapter(id){
+  deleteTargetId = id;
+  document.getElementById('confirmText').textContent = 'این فصل برای همیشه حذف می‌شود. مطمئنی؟';
+  const btn = document.getElementById('confirmDangerBtn');
+  btn.textContent = 'حذف کن';
+  btn.onclick = ()=>{
+    DATA.chapters = DATA.chapters.filter(c=>c.id!==deleteTargetId);
+    persist(); renderLibrary(); closeConfirm();
+  };
+  document.getElementById('confirmOverlay').classList.add('active');
+}
+function closeConfirm(){ document.getElementById('confirmOverlay').classList.remove('active'); }
+
+/* ---------------- Editor ---------------- */
+let editingId = null;
+function openEditor(id){
+  editingId = id;
+  const ch = id ? DATA.chapters.find(c=>c.id===id) : null;
+  document.getElementById('editorHeading').textContent = id ? 'ویرایش فصل' : 'فصل جدید';
+  document.getElementById('chapterTitleInput').value = ch ? ch.title : '';
+  document.getElementById('chapterContentInput').value = ch ? ch.content : '';
+  showScreen('editor');
+}
+function closeEditor(){ showScreen('library'); }
+function saveChapter(){
+  const title = document.getElementById('chapterTitleInput').value.trim() || 'بدون عنوان';
+  const content = document.getElementById('chapterContentInput').value;
+  if(editingId){
+    const ch = DATA.chapters.find(c=>c.id===editingId);
+    ch.title = title; ch.content = content;
+  } else {
+    DATA.chapters.push({id: uid(), title, content});
+  }
+  persist();
+  renderLibrary();
+  showScreen('library');
+}
+
+/* ---------------- Reading / pagination ---------------- */
+let pages = []; // { chapterIndex, chapterTitle, text, pageInChapter, totalInChapter }
+let currentPageIndex = 0;
+let readingTheme = DATA.settings.theme;
+
+function applySettingsToRoot(){
+  document.documentElement.style.setProperty('--font-size', DATA.settings.fontSize+'px');
+  document.documentElement.style.setProperty('--line-height', (DATA.settings.lineHeight/100));
+  document.documentElement.style.setProperty('--body-font', DATA.settings.font==='Amiri' ? "'Amiri','Noto Naskh Arabic',serif" : "'Vazirmatn','Tahoma',sans-serif");
+}
+
+function themeColors(theme){
+  if(theme==='night') return {bg:'#2C2114', text:'#E7D9B8'};
+  if(theme==='sepia') return {bg:'#E4D3A8', text:'#3B2A1D'};
+  return {bg:'#F1E7D0', text:'#3B2A1D'};
+}
+
+function paginateAll(){
+  applySettingsToRoot();
+  pages = [];
+  if(DATA.chapters.length===0) return;
+
+  // measuring element sized like the actual page-layer
+  const stage = document.getElementById('bookStage');
+  const stageRect = stage.getBoundingClientRect();
+  const pageWidth = stageRect.width - 28 - 44; // matches inset + padding approx
+  const pageHeight = stageRect.height - 56 - 46 - 40;
+
+  const measurer = document.createElement('div');
+  measurer.style.position='absolute';
+  measurer.style.visibility='hidden';
+  measurer.style.width = pageWidth+'px';
+  measurer.style.fontFamily = DATA.settings.font==='Amiri' ? "'Amiri','Noto Naskh Arabic',serif" : "'Vazirmatn','Tahoma',sans-serif";
+  measurer.style.fontSize = DATA.settings.fontSize+'px';
+  measurer.style.lineHeight = (DATA.settings.lineHeight/100);
+  measurer.style.whiteSpace = 'pre-wrap';
+  measurer.style.wordWrap = 'break-word';
+  document.body.appendChild(measurer);
+
+  DATA.chapters.forEach((ch, chapterIndex)=>{
+    const words = (ch.content||'').split(/(\s+)/); // keep whitespace tokens incl newlines
+    let current = '';
+    let chapterPages = [];
+    for(let i=0;i<words.length;i++){
+      const attempt = current + words[i];
+      measurer.textContent = attempt;
+      if(measurer.offsetHeight > pageHeight && current.length>0){
+        chapterPages.push(current);
+        current = words[i].replace(/^\s+/,'');
+      } else {
+        current = attempt;
+      }
+    }
+    if(current.trim().length>0 || chapterPages.length===0) chapterPages.push(current);
+
+    chapterPages.forEach((text, idx)=>{
+      pages.push({
+        chapterIndex,
+        chapterTitle: ch.title,
+        text,
+        pageInChapter: idx+1,
+        totalInChapter: chapterPages.length
+      });
+    });
+  });
+
+  document.body.removeChild(measurer);
+}
+
+function startReading(){
+  if(DATA.chapters.length===0){
+    openEditor(null);
+    return;
+  }
+  showScreen('reading');
+  setTimeout(()=>{
+    paginateAll();
+    if(DATA.bookmark && DATA.bookmark.pageIndex < pages.length){
+      currentPageIndex = DATA.bookmark.pageIndex;
+    } else {
+      currentPageIndex = 0;
+    }
+    setTheme(DATA.settings.theme, true);
+    renderCurrentPage();
+  }, 30);
+}
+
+function exitReading(){
+  showScreen('library');
+  renderLibrary();
+}
+
+function renderCurrentPage(){
+  if(pages.length===0){ pages=[{chapterTitle:'—', text:'این فصل خالی است.', pageInChapter:1, totalInChapter:1}]; }
+  const p = pages[currentPageIndex];
+  document.getElementById('readChapTitle').textContent = p.chapterTitle;
+  document.getElementById('pageTextFront').textContent = p.text;
+  document.getElementById('pageNumFront').textContent = `${toFa(p.pageInChapter)} از ${toFa(p.totalInChapter)}`;
+  document.getElementById('pgLabel').textContent = `صفحه ${toFa(currentPageIndex+1)} از ${toFa(pages.length)}`;
+  updateRibbon();
+}
+
+function preloadBehind(p){
+  if(!p) { document.getElementById('pageTextBehind').textContent=''; return; }
+  document.getElementById('pageTextBehind').textContent = p.text;
+  document.getElementById('pageNumBehind').textContent = `${toFa(p.pageInChapter)} از ${toFa(p.totalInChapter)}`;
+}
+
+let flipping = false;
+function nextPage(){
+  if(flipping) return;
+  if(currentPageIndex >= pages.length-1){ pulseEdge(); return; }
+  flipping = true;
+  const front = document.getElementById('pageFront');
+  preloadBehind(pages[currentPageIndex+1]);
+  front.style.transformOrigin = 'right center';
+  front.classList.add('flip-next');
+  setTimeout(()=>{
+    currentPageIndex++;
+    front.classList.remove('flip-next');
+    front.style.transition='none';
+    renderCurrentPage();
+    requestAnimationFrame(()=>{ front.style.transition=''; flipping=false; });
+  }, 560);
+}
+
+function prevPage(){
+  if(flipping) return;
+  if(currentPageIndex <= 0){ pulseEdge(); return; }
+  flipping = true;
+  const front = document.getElementById('pageFront');
+  preloadBehind(pages[currentPageIndex-1]);
+  front.style.transformOrigin = 'left center';
+  front.classList.add('flipping');
+  setTimeout(()=>{
+    currentPageIndex--;
+    front.classList.remove('flipping');
+    front.style.transition='none';
+    renderCurrentPage();
+    requestAnimationFrame(()=>{ front.style.transition=''; flipping=false; });
+  }, 560);
+}
+
+function pulseEdge(){
+  const stage = document.getElementById('bookStage');
+  stage.style.transition='transform .1s';
+  stage.style.transform='scale(0.985)';
+  setTimeout(()=>{ stage.style.transform='scale(1)'; }, 100);
+}
+
+/* toggle UI chrome on tap in the middle (not the side zones) */
+document.getElementById('bookStage').addEventListener('click', (e)=>{
+  const rect = e.currentTarget.getBoundingClientRect();
+  const relX = (e.clientX - rect.left) / rect.width;
+  if(relX > 0.34 && relX < 0.66){
+    document.getElementById('readTopbar').classList.toggle('ui-hidden');
+    document.getElementById('readBottombar').classList.toggle('ui-hidden');
+  }
+});
+
+/* ---------------- bookmark ---------------- */
+function updateRibbon(){
+  const isBookmarked = DATA.bookmark && DATA.bookmark.pageIndex === currentPageIndex;
+  document.getElementById('ribbonBtn').classList.toggle('active', !!isBookmarked);
+}
+function toggleBookmark(){
+  if(DATA.bookmark && DATA.bookmark.pageIndex === currentPageIndex){
+    DATA.bookmark = null;
+  } else {
+    DATA.bookmark = { pageIndex: currentPageIndex };
+  }
+  persist();
+  updateRibbon();
+}
+
+/* ---------------- chapter jump list ---------------- */
+function showChapterList(){
+  const jump = document.getElementById('jumpList');
+  jump.innerHTML = DATA.chapters.map((ch,i)=>{
+    const firstPageIdx = pages.findIndex(p=>p.chapterIndex===i);
+    return `<div class="chapter-card" style="border-right-color:var(--gold);" onclick="jumpToChapter(${firstPageIdx})">
+      <div class="chapter-num">${toFa(i+1)}</div>
+      <div class="chapter-info"><div class="t">${escapeHtml(ch.title)}</div></div>
+    </div>`;
+  }).join('') || '<p style="color:#c7b48a;text-align:center;">فصلی وجود ندارد</p>';
+  document.getElementById('chapterListOverlay').classList.add('active');
+}
+function closeChapterList(){ document.getElementById('chapterListOverlay').classList.remove('active'); }
+function jumpToChapter(pageIdx){
+  if(pageIdx<0) return;
+  currentPageIndex = pageIdx;
+  renderCurrentPage();
+  closeChapterList();
+}
+
+/* ---------------- settings ---------------- */
+function openSettings(){
+  document.getElementById('fontSizeRange').value = DATA.settings.fontSize;
+  document.getElementById('fontSizeLabel').textContent = toFa(DATA.settings.fontSize);
+  document.getElementById('lineHeightRange').value = DATA.settings.lineHeight;
+  refreshSettingsUI();
+  document.getElementById('settingsOverlay').classList.add('active');
+}
+function closeSettings(){
+  document.getElementById('settingsOverlay').classList.remove('active');
+  const readingActive = document.getElementById('reading').classList.contains('active');
+  if(readingActive){ paginateAll(); if(currentPageIndex>=pages.length) currentPageIndex=pages.length-1; renderCurrentPage(); }
+}
+function refreshSettingsUI(){
+  document.querySelectorAll('.theme-swatch').forEach(b=> b.classList.toggle('selected', b.dataset.theme===DATA.settings.theme));
+  document.querySelectorAll('#fontOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.font===DATA.settings.font));
+}
+function setTheme(theme, skipRepaginate){
+  DATA.settings.theme = theme;
+  persist();
+  const colors = themeColors(theme);
+  const reading = document.getElementById('reading');
+  reading.classList.remove('theme-night','theme-sepia');
+  if(theme==='night') reading.classList.add('theme-night');
+  if(theme==='sepia') reading.classList.add('theme-sepia');
+  document.documentElement.style.setProperty('--paper-bg', colors.bg);
+  document.documentElement.style.setProperty('--text-col', colors.text);
+  document.getElementById('pageFront').style.background = colors.bg;
+  document.getElementById('pageBehind').style.background = colors.bg;
+  refreshSettingsUI();
+}
+function setFont(font){
+  DATA.settings.font = font; persist(); refreshSettingsUI();
+}
+function setFontSize(v){
+  DATA.settings.fontSize = parseInt(v);
+  document.getElementById('fontSizeLabel').textContent = toFa(v);
+  persist();
+}
+function setLineHeight(v){
+  DATA.settings.lineHeight = parseInt(v);
+  persist();
+}
+
+/* ---------------- init ---------------- */
+setTheme(DATA.settings.theme, true);
+renderLibrary();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+window.addEventListener('resize', ()=>{
+  if(document.getElementById('reading').classList.contains('active')){
+    paginateAll();
+    if(currentPageIndex>=pages.length) currentPageIndex = Math.max(0,pages.length-1);
+    renderCurrentPage();
+  }
+});
+</script>
+</body>
+</html>
