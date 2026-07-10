@@ -140,6 +140,7 @@
     transform-style:preserve-3d;
     padding:26px 22px 20px;
     overflow:hidden;
+    transition:transform 0.55s cubic-bezier(.4,.1,.2,1);
   }
   .page-layer .page-text{
     font-family:var(--body-font); color:var(--text-col,var(--ink));
@@ -150,23 +151,27 @@
     position:absolute; bottom:10px; left:0; right:0; text-align:center;
     font-family:var(--ui-font); font-size:11.5px; color:var(--ink-soft); opacity:0.7;
   }
-  .flip-anim{
-    transition:transform 0.55s cubic-bezier(.4,.1,.2,1);
-    transform-origin: right center;
-  }
-  .flip-anim.flip-next{transform:rotateY(-160deg);}
-  .flip-anim.flip-prev{transform-origin:left center;}
-  .flip-anim.flip-prev.flipping{transform:rotateY(160deg);}
 
-  .tap-zone{position:absolute; top:0; bottom:0; width:32%; z-index:15;}
-  .tap-zone.left{left:0;}
-  .tap-zone.right{right:0;}
+  .tap-zone{position:absolute; z-index:15;}
+  .book-stage[data-orientation="horizontal"] .tz-prev{top:0; bottom:0; right:0; width:32%;}
+  .book-stage[data-orientation="horizontal"] .tz-next{top:0; bottom:0; left:0; width:32%;}
+  .book-stage[data-orientation="vertical"] .tz-prev{left:0; right:0; top:0; height:26%;}
+  .book-stage[data-orientation="vertical"] .tz-next{left:0; right:0; bottom:0; height:26%;}
   .tap-hint{
-    position:absolute; top:50%; transform:translateY(-50%);
-    color:rgba(59,42,29,0.28); font-size:22px; pointer-events:none;
+    position:absolute; color:rgba(59,42,29,0.28); font-size:22px; pointer-events:none;
   }
-  .tap-zone.left .tap-hint{left:8px;}
-  .tap-zone.right .tap-hint{right:8px;}
+  .book-stage[data-orientation="horizontal"] .tz-prev .tap-hint{top:50%; right:8px; transform:translateY(-50%);}
+  .book-stage[data-orientation="horizontal"] .tz-next .tap-hint{top:50%; left:8px; transform:translateY(-50%);}
+  .book-stage[data-orientation="vertical"] .tz-prev .tap-hint{top:6px; left:50%; transform:translateX(-50%);}
+  .book-stage[data-orientation="vertical"] .tz-next .tap-hint{bottom:6px; left:50%; transform:translateX(-50%);}
+
+  .nav-btn{
+    width:40px; height:40px; border-radius:50%; flex-shrink:0;
+    background:rgba(255,255,255,0.1); color:var(--gold); font-size:20px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .nav-btn:active{background:rgba(255,255,255,0.22);}
+  .nav-btn:disabled{opacity:0.35;}
 
   .ribbon{
     position:absolute; top:0; z-index:18; width:28px; height:60px;
@@ -181,11 +186,11 @@
 
   .read-bottombar{
     position:absolute; bottom:0; left:0; right:0; z-index:20;
-    display:flex; align-items:center; justify-content:center; gap:16px;
-    padding:10px 14px 14px; background:linear-gradient(0deg, rgba(0,0,0,0.5), transparent);
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 16px 16px; background:linear-gradient(0deg, rgba(0,0,0,0.5), transparent);
     transition:opacity .25s, transform .25s;
   }
-  .read-bottombar .pg-label{color:#F1E7D0; font-size:12.5px; font-family:var(--ui-font);}
+  .read-bottombar .pg-label{color:#F1E7D0; font-size:12.5px; font-family:var(--ui-font); flex:1; text-align:center;}
 
   /* ---------- settings sheet ---------- */
   .sheet-overlay{
@@ -267,17 +272,19 @@
       <button class="icon-btn" onclick="openSettings()">⚙</button>
     </div>
 
-    <div class="book-stage" id="bookStage">
+    <div class="book-stage" id="bookStage" data-orientation="horizontal">
       <div class="page-layer" id="pageBehind"><div class="page-text" id="pageTextBehind"></div><div class="page-num" id="pageNumBehind"></div></div>
-      <div class="page-layer flip-anim" id="pageFront"><div class="page-text" id="pageTextFront"></div><div class="page-num" id="pageNumFront"></div></div>
+      <div class="page-layer" id="pageFront"><div class="page-text" id="pageTextFront"></div><div class="page-num" id="pageNumFront"></div></div>
       <div class="ribbon" id="ribbonBtn" onclick="toggleBookmark()"><span>🔖</span></div>
-      <div class="tap-zone right" onclick="prevPage()"><div class="tap-hint">‹</div></div>
-      <div class="tap-zone left" onclick="nextPage()"><div class="tap-hint">›</div></div>
+      <div class="tap-zone tz-prev" id="tzPrev" onclick="prevPage()"><div class="tap-hint" id="prevHint">‹</div></div>
+      <div class="tap-zone tz-next" id="tzNext" onclick="nextPage()"><div class="tap-hint" id="nextHint">›</div></div>
     </div>
 
     <div class="read-bottombar" id="readBottombar">
       <button class="icon-btn" onclick="showChapterList()">☰</button>
+      <button class="nav-btn" id="navPrevBtn" onclick="prevPage()">‹</button>
       <div class="pg-label" id="pgLabel">صفحه ۱ از ۱</div>
+      <button class="nav-btn" id="navNextBtn" onclick="nextPage()">›</button>
     </div>
   </div>
 
@@ -304,6 +311,14 @@
         <button class="opt-chip" data-font="NotoNaskh" onclick="setFont('NotoNaskh')" style="font-family:'Noto Naskh Arabic',serif;">نسخ کلاسیک</button>
         <button class="opt-chip" data-font="Markazi" onclick="setFont('Markazi')" style="font-family:'Markazi Text',serif;">مرکزی</button>
         <button class="opt-chip" data-font="Vazirmatn" onclick="setFont('Vazirmatn')" style="font-family:Vazirmatn,sans-serif;">مدرن (وزیرمتن)</button>
+      </div>
+    </div>
+
+    <div class="sheet-group">
+      <label>جهت ورق زدن</label>
+      <div class="opt-row" id="orientationOptRow">
+        <button class="opt-chip" data-orientation="horizontal" onclick="setOrientation('horizontal')">افقی (چپ/راست)</button>
+        <button class="opt-chip" data-orientation="vertical" onclick="setOrientation('vertical')">عمودی (بالا/پایین)</button>
       </div>
     </div>
 
@@ -351,7 +366,7 @@ function loadData(){
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw) return JSON.parse(raw);
   }catch(e){}
-  return { chapters: [], settings:{theme:'cream', font:'Amiri', fontSize:20, lineHeight:210}, bookmark:null };
+  return { chapters: [], settings:{theme:'cream', font:'Amiri', fontSize:20, lineHeight:210, orientation:'horizontal'}, bookmark:null };
 }
 let DATA = loadData();
 
@@ -543,6 +558,8 @@ function startReading(){
     return;
   }
   showScreen('reading');
+  const stage = document.getElementById('bookStage');
+  if(stage) stage.setAttribute('data-orientation', DATA.settings.orientation || 'horizontal');
   const doPaginate = ()=>{
     setTimeout(()=>{
       paginateAll();
@@ -577,6 +594,10 @@ function renderCurrentPage(){
   document.getElementById('pageNumFront').textContent = `${toFa(p.pageInChapter)} از ${toFa(p.totalInChapter)}`;
   document.getElementById('pgLabel').textContent = `صفحه ${toFa(currentPageIndex+1)} از ${toFa(pages.length)}`;
   updateRibbon();
+  const prevBtn = document.getElementById('navPrevBtn');
+  const nextBtn = document.getElementById('navNextBtn');
+  if(prevBtn) prevBtn.disabled = currentPageIndex<=0;
+  if(nextBtn) nextBtn.disabled = currentPageIndex>=pages.length-1;
 }
 
 function preloadBehind(p){
@@ -586,39 +607,44 @@ function preloadBehind(p){
 }
 
 let flipping = false;
-function nextPage(){
+function flipTo(direction){
   if(flipping) return;
-  if(currentPageIndex >= pages.length-1){ pulseEdge(); return; }
-  flipping = true;
-  const front = document.getElementById('pageFront');
-  preloadBehind(pages[currentPageIndex+1]);
-  front.style.transformOrigin = 'right center';
-  front.classList.add('flip-next');
-  setTimeout(()=>{
-    currentPageIndex++;
-    front.classList.remove('flip-next');
-    front.style.transition='none';
-    renderCurrentPage();
-    requestAnimationFrame(()=>{ front.style.transition=''; flipping=false; });
-  }, 560);
-}
+  if(direction==='next' && currentPageIndex >= pages.length-1){ pulseEdge(); return; }
+  if(direction==='prev' && currentPageIndex <= 0){ pulseEdge(); return; }
 
-function prevPage(){
-  if(flipping) return;
-  if(currentPageIndex <= 0){ pulseEdge(); return; }
   flipping = true;
   const front = document.getElementById('pageFront');
-  preloadBehind(pages[currentPageIndex-1]);
-  front.style.transformOrigin = 'left center';
-  front.classList.add('flipping');
+  const orientation = DATA.settings.orientation || 'horizontal';
+  const targetIndex = direction==='next' ? currentPageIndex+1 : currentPageIndex-1;
+  preloadBehind(pages[targetIndex]);
+
+  let origin, angle;
+  if(orientation==='vertical'){
+    origin = direction==='next' ? 'center bottom' : 'center top';
+    angle = direction==='next' ? 'rotateX(-158deg)' : 'rotateX(158deg)';
+  } else {
+    origin = direction==='next' ? 'right center' : 'left center';
+    angle = direction==='next' ? 'rotateY(-158deg)' : 'rotateY(158deg)';
+  }
+
+  front.style.transformOrigin = origin;
+  front.style.transform = 'none';
+  // force reflow so the browser registers the starting state before animating
+  void front.offsetHeight;
+  front.style.transform = angle;
+
   setTimeout(()=>{
-    currentPageIndex--;
-    front.classList.remove('flipping');
-    front.style.transition='none';
+    currentPageIndex = targetIndex;
+    front.style.transition = 'none';
+    front.style.transform = 'none';
     renderCurrentPage();
-    requestAnimationFrame(()=>{ front.style.transition=''; flipping=false; });
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>{ front.style.transition=''; flipping=false; });
+    });
   }, 560);
 }
+function nextPage(){ flipTo('next'); }
+function prevPage(){ flipTo('prev'); }
 
 function pulseEdge(){
   const stage = document.getElementById('bookStage');
@@ -627,15 +653,57 @@ function pulseEdge(){
   setTimeout(()=>{ stage.style.transform='scale(1)'; }, 100);
 }
 
-/* toggle UI chrome on tap in the middle (not the side zones) */
+/* toggle UI chrome on tap in the middle (not the side/edge zones) */
 document.getElementById('bookStage').addEventListener('click', (e)=>{
   const rect = e.currentTarget.getBoundingClientRect();
-  const relX = (e.clientX - rect.left) / rect.width;
-  if(relX > 0.34 && relX < 0.66){
-    document.getElementById('readTopbar').classList.toggle('ui-hidden');
-    document.getElementById('readBottombar').classList.toggle('ui-hidden');
+  const orientation = DATA.settings.orientation || 'horizontal';
+  if(orientation==='vertical'){
+    const relY = (e.clientY - rect.top) / rect.height;
+    if(relY > 0.30 && relY < 0.70){
+      document.getElementById('readTopbar').classList.toggle('ui-hidden');
+      document.getElementById('readBottombar').classList.toggle('ui-hidden');
+    }
+  } else {
+    const relX = (e.clientX - rect.left) / rect.width;
+    if(relX > 0.34 && relX < 0.66){
+      document.getElementById('readTopbar').classList.toggle('ui-hidden');
+      document.getElementById('readBottombar').classList.toggle('ui-hidden');
+    }
   }
 });
+
+/* swipe gesture support, as a robust backup to the tap zones */
+(function(){
+  let startX=0, startY=0, startT=0, tracking=false;
+  const stage = document.getElementById('bookStage');
+  stage.addEventListener('touchstart', (e)=>{
+    if(e.touches.length!==1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startT = Date.now();
+    tracking = true;
+  }, {passive:true});
+  stage.addEventListener('touchend', (e)=>{
+    if(!tracking) return;
+    tracking = false;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - startX;
+    const dy = touch.clientY - startY;
+    const dt = Date.now() - startT;
+    if(dt > 700) return;
+    const orientation = DATA.settings.orientation || 'horizontal';
+    const THRESH = 40;
+    if(orientation==='vertical'){
+      if(Math.abs(dy) > THRESH && Math.abs(dy) > Math.abs(dx)){
+        if(dy < 0) nextPage(); else prevPage();
+      }
+    } else {
+      if(Math.abs(dx) > THRESH && Math.abs(dx) > Math.abs(dy)){
+        if(dx < 0) nextPage(); else prevPage();
+      }
+    }
+  }, {passive:true});
+})();
 
 /* ---------------- bookmark ---------------- */
 function updateRibbon(){
@@ -688,6 +756,20 @@ function closeSettings(){
 function refreshSettingsUI(){
   document.querySelectorAll('.theme-swatch').forEach(b=> b.classList.toggle('selected', b.dataset.theme===DATA.settings.theme));
   document.querySelectorAll('#fontOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.font===DATA.settings.font));
+  document.querySelectorAll('#orientationOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.orientation===(DATA.settings.orientation||'horizontal')));
+}
+function setOrientation(o){
+  DATA.settings.orientation = o;
+  persist();
+  const stage = document.getElementById('bookStage');
+  if(stage) stage.setAttribute('data-orientation', o);
+  refreshSettingsUI();
+  const readingActive = document.getElementById('reading').classList.contains('active');
+  if(readingActive){
+    paginateAll();
+    if(currentPageIndex>=pages.length) currentPageIndex = Math.max(0,pages.length-1);
+    renderCurrentPage();
+  }
 }
 function setTheme(theme, skipRepaginate){
   DATA.settings.theme = theme;
@@ -730,6 +812,16 @@ window.addEventListener('resize', ()=>{
     if(currentPageIndex>=pages.length) currentPageIndex = Math.max(0,pages.length-1);
     renderCurrentPage();
   }
+});
+window.addEventListener('orientationchange', ()=>{
+  // dimensions settle a bit after the rotation event fires, so wait briefly
+  setTimeout(()=>{
+    if(document.getElementById('reading').classList.contains('active')){
+      paginateAll();
+      if(currentPageIndex>=pages.length) currentPageIndex = Math.max(0,pages.length-1);
+      renderCurrentPage();
+    }
+  }, 250);
 });
 </script>
 </body>
