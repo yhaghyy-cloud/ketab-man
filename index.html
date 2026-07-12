@@ -234,14 +234,31 @@
 <body>
 <div id="app">
 
-  <!-- LIBRARY -->
-  <div class="screen active" id="library">
+  <!-- BOOKSHELF -->
+  <div class="screen active" id="bookshelf">
     <div class="lib-header">
       <div>
-        <h1>کتاب من</h1>
+        <h1>قفسهٔ کتاب‌ها</h1>
+        <div class="sub" id="bookCountLabel">۰ کتاب</div>
+      </div>
+    </div>
+    <div class="lib-list" id="bookshelfList"></div>
+    <div class="fab-row">
+      <button class="fab primary" onclick="askNewBook()">＋ کتاب جدید</button>
+    </div>
+  </div>
+
+  <!-- LIBRARY -->
+  <div class="screen" id="library">
+    <div class="lib-header">
+      <div>
+        <h1 id="libraryBookTitle">کتاب من</h1>
         <div class="sub" id="chapCountLabel">۰ فصل</div>
       </div>
-      <button class="icon-btn" onclick="openSettings()">⚙</button>
+      <div style="display:flex; gap:8px;">
+        <button class="icon-btn" onclick="backToBookshelf()">📚</button>
+        <button class="icon-btn" onclick="openSettings()">⚙</button>
+      </div>
     </div>
     <div class="lib-list" id="libList"></div>
     <div class="fab-row">
@@ -383,6 +400,18 @@
   </div>
 </div>
 
+<!-- BOOK NAME OVERLAY -->
+<div class="confirm-overlay" id="bookNameOverlay">
+  <div class="confirm-box">
+    <p id="bookNamePrompt" style="margin-bottom:10px;">نام کتاب را وارد کنید</p>
+    <input id="bookNameInput" type="text" placeholder="مثلاً: خاطرات من" style="width:100%;padding:11px 12px;border-radius:10px;border:1px solid rgba(176,137,72,0.4);background:#221A12;color:var(--night-ink);font-size:15px;margin-bottom:8px;box-sizing:border-box;">
+    <div class="confirm-buttons">
+      <button class="cancel" onclick="closeBookNameOverlay()">انصراف</button>
+      <button class="danger" style="background:var(--gold); color:#241a10;" onclick="submitBookName()">تأیید</button>
+    </div>
+  </div>
+</div>
+
 <!-- CONFIRM DIALOG -->
 <div class="confirm-overlay" id="confirmOverlay">
   <div class="confirm-box">
@@ -396,20 +425,74 @@
 
 
 <script>
-/* ---------------- Data layer ---------------- */
-const STORAGE_KEY = 'ketabman_data_v1';
+/* ---------------- Data layer (multi-book) ---------------- */
+const LEGACY_STORAGE_KEY = 'ketabman_data_v1';
+const SETTINGS_KEY = 'ketabman_settings_v1';
+const BOOKS_INDEX_KEY = 'ketabman_books_index_v1';
+function bookKey(id){ return 'ketabman_book_' + id; }
 
-function loadData(){
+function defaultSettings(){
+  return {theme:'cream', font:'Amiri', fontSize:20, lineHeight:210, orientation:'horizontal', pageDirection:'rtl', align:'right', editPassword:null};
+}
+function loadSettings(){
   try{
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if(raw) return Object.assign(defaultSettings(), JSON.parse(raw));
+  }catch(e){}
+  return defaultSettings();
+}
+function persistSettings(){
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTINGS)); }catch(e){}
+}
+
+function loadBookData(id){
+  try{
+    const raw = localStorage.getItem(bookKey(id));
     if(raw) return JSON.parse(raw);
   }catch(e){}
-  return { chapters: [], settings:{theme:'cream', font:'Amiri', fontSize:20, lineHeight:210, orientation:'horizontal', pageDirection:'rtl', align:'right', editPassword:null}, bookmark:null };
+  return { chapters: [], bookmark: null };
 }
-let DATA = loadData();
+function persistBooksIndex(){
+  try{ localStorage.setItem(BOOKS_INDEX_KEY, JSON.stringify(BOOKS_INDEX)); }catch(e){}
+}
+
+// One-time migration: if this phone still has data from the old single-book
+// version, wrap it into the new multi-book format as the first book so
+// nothing already written is lost.
+function migrateIfNeeded(){
+  let idxRaw = null;
+  try{ idxRaw = localStorage.getItem(BOOKS_INDEX_KEY); }catch(e){}
+  if(idxRaw){ try{ BOOKS_INDEX = JSON.parse(idxRaw); }catch(e){ BOOKS_INDEX = []; } return; }
+
+  let legacy = null;
+  try{
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if(raw) legacy = JSON.parse(raw);
+  }catch(e){}
+
+  if(legacy){
+    const id = uid();
+    const bookData = { chapters: legacy.chapters || [], bookmark: legacy.bookmark || null };
+    try{ localStorage.setItem(bookKey(id), JSON.stringify(bookData)); }catch(e){}
+    BOOKS_INDEX = [{ id, title: 'کتاب من', createdAt: Date.now(), lastOpened: Date.now() }];
+    if(legacy.settings){
+      SETTINGS = Object.assign(defaultSettings(), legacy.settings);
+      persistSettings();
+    }
+  } else {
+    BOOKS_INDEX = [];
+  }
+  persistBooksIndex();
+}
+
+let SETTINGS = loadSettings();
+let BOOKS_INDEX = [];
+let currentBookId = null;
+let CURRENT_BOOK = { chapters: [], bookmark: null };
 
 function persist(){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA)); }catch(e){}
+  if(!currentBookId) return;
+  try{ localStorage.setItem(bookKey(currentBookId), JSON.stringify(CURRENT_BOOK)); }catch(e){}
 }
 
 function uid(){ return 'c'+Date.now()+Math.floor(Math.random()*1000); }
@@ -420,11 +503,124 @@ function showScreen(id){
   document.getElementById(id).classList.add('active');
 }
 
-/* ---------------- Library ---------------- */
+/* ---------------- Bookshelf ---------------- */
+function renderBookshelf(){
+  document.getElementById('bookCountLabel').textContent = toFa(BOOKS_INDEX.length) + ' کتاب';
+  const list = document.getElementById('bookshelfList');
+  if(BOOKS_INDEX.length===0){
+    list.innerHTML = `<div class="empty-state">
+      <div class="big">📚</div>
+      <h3>هنوز کتابی نساخته‌ای</h3>
+      <p>با دکمهٔ «کتاب جدید» اولین کتابت را بساز؛<br>هر کتاب فصل‌ها و نام جداگانهٔ خودش را دارد.</p>
+    </div>`;
+    return;
+  }
+  const sorted = [...BOOKS_INDEX].sort((a,b)=>(b.lastOpened||0)-(a.lastOpened||0));
+  list.innerHTML = sorted.map(b=>{
+    const data = loadBookData(b.id);
+    const chapCount = (data.chapters||[]).length;
+    return `
+    <div class="chapter-card" onclick="openBook('${b.id}')" style="cursor:pointer;">
+      <div class="chapter-num">📖</div>
+      <div class="chapter-info">
+        <div class="t">${escapeHtml(b.title)}</div>
+        <div class="p">${toFa(chapCount)} فصل</div>
+      </div>
+      <div class="chapter-actions">
+        <button class="mini-btn" onclick="event.stopPropagation(); askRenameBook('${b.id}')">✎</button>
+        <button class="mini-btn" onclick="event.stopPropagation(); askDeleteBook('${b.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openBook(id){
+  const entry = BOOKS_INDEX.find(b=>b.id===id);
+  if(!entry) return;
+  currentBookId = id;
+  CURRENT_BOOK = loadBookData(id);
+  entry.lastOpened = Date.now();
+  persistBooksIndex();
+  document.getElementById('libraryBookTitle').textContent = entry.title;
+  showScreen('library');
+  renderLibrary();
+}
+function backToBookshelf(){
+  showScreen('bookshelf');
+  renderBookshelf();
+}
+
+let bookNameMode = null; // 'new' | 'rename'
+let bookNameTargetId = null;
+function askNewBook(){
+  requireUnlock(()=>{
+    bookNameMode = 'new'; bookNameTargetId = null;
+    document.getElementById('bookNamePrompt').textContent = 'نام کتاب جدید را وارد کنید';
+    document.getElementById('bookNameInput').value = '';
+    document.getElementById('bookNameOverlay').classList.add('active');
+    setTimeout(()=>{ const el=document.getElementById('bookNameInput'); if(el) el.focus(); }, 50);
+  });
+}
+function askRenameBook(id){
+  requireUnlock(()=>{
+    const entry = BOOKS_INDEX.find(b=>b.id===id);
+    if(!entry) return;
+    bookNameMode = 'rename'; bookNameTargetId = id;
+    document.getElementById('bookNamePrompt').textContent = 'نام جدید کتاب را وارد کنید';
+    document.getElementById('bookNameInput').value = entry.title;
+    document.getElementById('bookNameOverlay').classList.add('active');
+    setTimeout(()=>{ const el=document.getElementById('bookNameInput'); if(el) el.focus(); }, 50);
+  });
+}
+function closeBookNameOverlay(){
+  document.getElementById('bookNameOverlay').classList.remove('active');
+  bookNameMode = null; bookNameTargetId = null;
+}
+function submitBookName(){
+  const val = (document.getElementById('bookNameInput').value||'').trim();
+  if(!val) return;
+  if(bookNameMode==='new'){
+    const id = uid();
+    const bookData = { chapters: [], bookmark: null };
+    try{ localStorage.setItem(bookKey(id), JSON.stringify(bookData)); }catch(e){}
+    BOOKS_INDEX.push({ id, title: val, createdAt: Date.now(), lastOpened: Date.now() });
+    persistBooksIndex();
+    closeBookNameOverlay();
+    openBook(id);
+  } else if(bookNameMode==='rename'){
+    const entry = BOOKS_INDEX.find(b=>b.id===bookNameTargetId);
+    if(entry){ entry.title = val; persistBooksIndex(); }
+    closeBookNameOverlay();
+    renderBookshelf();
+    if(currentBookId===bookNameTargetId){
+      document.getElementById('libraryBookTitle').textContent = val;
+    }
+  }
+}
+
+let deleteBookTargetId = null;
+function askDeleteBook(id){
+  requireUnlock(()=>{
+    deleteBookTargetId = id;
+    document.getElementById('confirmText').textContent = 'این کتاب و همهٔ فصل‌های آن برای همیشه حذف می‌شود. مطمئنی؟';
+    const btn = document.getElementById('confirmDangerBtn');
+    btn.textContent = 'حذف کن';
+    btn.onclick = ()=>{
+      try{ localStorage.removeItem(bookKey(deleteBookTargetId)); }catch(e){}
+      BOOKS_INDEX = BOOKS_INDEX.filter(b=>b.id!==deleteBookTargetId);
+      persistBooksIndex();
+      closeConfirm();
+      renderBookshelf();
+    };
+    document.getElementById('confirmOverlay').classList.add('active');
+  });
+}
+
+/* ---------------- Library (chapters of the currently open book) ---------------- */
 function renderLibrary(){
   const list = document.getElementById('libList');
-  document.getElementById('chapCountLabel').textContent = DATA.chapters.length + ' فصل';
-  if(DATA.chapters.length===0){
+  document.getElementById('chapCountLabel').textContent = toFa(CURRENT_BOOK.chapters.length) + ' فصل';
+  if(CURRENT_BOOK.chapters.length===0){
     list.innerHTML = `<div class="empty-state">
       <div class="big">📕</div>
       <h3>هنوز فصلی نداری</h3>
@@ -432,7 +628,7 @@ function renderLibrary(){
     </div>`;
     return;
   }
-  list.innerHTML = DATA.chapters.map((ch,i)=>`
+  list.innerHTML = CURRENT_BOOK.chapters.map((ch,i)=>`
     <div class="chapter-card">
       <div class="chapter-num">${toFa(i+1)}</div>
       <div class="chapter-info">
@@ -459,10 +655,10 @@ function escapeHtml(s){
 
 function moveChapter(index, dir){
   const newIndex = index+dir;
-  if(newIndex<0 || newIndex>=DATA.chapters.length) return;
-  const tmp = DATA.chapters[index];
-  DATA.chapters[index] = DATA.chapters[newIndex];
-  DATA.chapters[newIndex] = tmp;
+  if(newIndex<0 || newIndex>=CURRENT_BOOK.chapters.length) return;
+  const tmp = CURRENT_BOOK.chapters[index];
+  CURRENT_BOOK.chapters[index] = CURRENT_BOOK.chapters[newIndex];
+  CURRENT_BOOK.chapters[newIndex] = tmp;
   persist();
   renderLibrary();
 }
@@ -474,7 +670,7 @@ function askDeleteChapter(id){
   const btn = document.getElementById('confirmDangerBtn');
   btn.textContent = 'حذف کن';
   btn.onclick = ()=>{
-    DATA.chapters = DATA.chapters.filter(c=>c.id!==deleteTargetId);
+    CURRENT_BOOK.chapters = CURRENT_BOOK.chapters.filter(c=>c.id!==deleteTargetId);
     persist(); renderLibrary(); closeConfirm();
   };
   document.getElementById('confirmOverlay').classList.add('active');
@@ -488,7 +684,7 @@ function openEditor(id){
 }
 function doOpenEditor(id){
   editingId = id;
-  const ch = id ? DATA.chapters.find(c=>c.id===id) : null;
+  const ch = id ? CURRENT_BOOK.chapters.find(c=>c.id===id) : null;
   document.getElementById('editorHeading').textContent = id ? 'ویرایش فصل' : 'فصل جدید';
   document.getElementById('chapterTitleInput').value = ch ? ch.title : '';
   document.getElementById('chapterContentInput').value = ch ? ch.content : '';
@@ -499,10 +695,10 @@ function saveChapter(){
   const title = document.getElementById('chapterTitleInput').value.trim() || 'بدون عنوان';
   const content = document.getElementById('chapterContentInput').value;
   if(editingId){
-    const ch = DATA.chapters.find(c=>c.id===editingId);
+    const ch = CURRENT_BOOK.chapters.find(c=>c.id===editingId);
     ch.title = title; ch.content = content;
   } else {
-    DATA.chapters.push({id: uid(), title, content});
+    CURRENT_BOOK.chapters.push({id: uid(), title, content});
   }
   persist();
   renderLibrary();
@@ -512,13 +708,13 @@ function saveChapter(){
 /* ---------------- Reading / pagination ---------------- */
 let pages = []; // { chapterIndex, chapterTitle, text, pageInChapter, totalInChapter }
 let currentPageIndex = 0;
-let readingTheme = DATA.settings.theme;
+let readingTheme = SETTINGS.theme;
 
 function applySettingsToRoot(){
-  document.documentElement.style.setProperty('--font-size', DATA.settings.fontSize+'px');
-  document.documentElement.style.setProperty('--line-height', (DATA.settings.lineHeight/100));
-  document.documentElement.style.setProperty('--body-font', fontStackFor(DATA.settings.font));
-  document.documentElement.style.setProperty('--text-align', DATA.settings.align || 'right');
+  document.documentElement.style.setProperty('--font-size', SETTINGS.fontSize+'px');
+  document.documentElement.style.setProperty('--line-height', (SETTINGS.lineHeight/100));
+  document.documentElement.style.setProperty('--body-font', fontStackFor(SETTINGS.font));
+  document.documentElement.style.setProperty('--text-align', SETTINGS.align || 'right');
 }
 function fontStackFor(key){
   if(key==='Amiri') return "'Amiri','Noto Naskh Arabic',serif";
@@ -536,7 +732,7 @@ function themeColors(theme){
 function paginateAll(){
   applySettingsToRoot();
   pages = [];
-  if(DATA.chapters.length===0) return;
+  if(CURRENT_BOOK.chapters.length===0) return;
 
   // Measure the REAL page-layer element's content box (padding-aware),
   // rather than guessing offsets, so pagination matches what's actually visible.
@@ -557,14 +753,14 @@ function paginateAll(){
   measurer.style.left = '-9999px';
   measurer.style.top = '0';
   measurer.style.width = pageWidth+'px';
-  measurer.style.fontFamily = fontStackFor(DATA.settings.font);
-  measurer.style.fontSize = DATA.settings.fontSize+'px';
-  measurer.style.lineHeight = (DATA.settings.lineHeight/100);
+  measurer.style.fontFamily = fontStackFor(SETTINGS.font);
+  measurer.style.fontSize = SETTINGS.fontSize+'px';
+  measurer.style.lineHeight = (SETTINGS.lineHeight/100);
   measurer.style.whiteSpace = 'pre-wrap';
   measurer.style.wordWrap = 'break-word';
   document.body.appendChild(measurer);
 
-  DATA.chapters.forEach((ch, chapterIndex)=>{
+  CURRENT_BOOK.chapters.forEach((ch, chapterIndex)=>{
     const words = (ch.content||'').split(/(\s+)/); // keep whitespace tokens incl newlines
     let current = '';
     let chapterPages = [];
@@ -595,22 +791,22 @@ function paginateAll(){
 }
 
 function startReading(){
-  if(DATA.chapters.length===0){
+  if(CURRENT_BOOK.chapters.length===0){
     openEditor(null);
     return;
   }
   showScreen('reading');
   const stage = document.getElementById('bookStage');
-  if(stage) stage.setAttribute('data-orientation', DATA.settings.orientation || 'horizontal');
+  if(stage) stage.setAttribute('data-orientation', SETTINGS.orientation || 'horizontal');
   const doPaginate = ()=>{
     setTimeout(()=>{
       paginateAll();
-      if(DATA.bookmark && DATA.bookmark.pageIndex < pages.length){
-        currentPageIndex = DATA.bookmark.pageIndex;
+      if(CURRENT_BOOK.bookmark && CURRENT_BOOK.bookmark.pageIndex < pages.length){
+        currentPageIndex = CURRENT_BOOK.bookmark.pageIndex;
       } else {
         currentPageIndex = 0;
       }
-      setTheme(DATA.settings.theme, true);
+      setTheme(SETTINGS.theme, true);
       renderCurrentPage();
     }, 60);
   };
@@ -656,12 +852,12 @@ function flipTo(direction){
 
   flipping = true;
   const front = document.getElementById('pageFront');
-  const orientation = DATA.settings.orientation || 'horizontal';
+  const orientation = SETTINGS.orientation || 'horizontal';
   const targetIndex = direction==='next' ? currentPageIndex+1 : currentPageIndex-1;
   preloadBehind(pages[targetIndex]);
 
   let origin, angle;
-  const isRTL = (DATA.settings.pageDirection || 'rtl') === 'rtl';
+  const isRTL = (SETTINGS.pageDirection || 'rtl') === 'rtl';
   if(orientation==='vertical'){
     origin = direction==='next' ? 'center bottom' : 'center top';
     angle = direction==='next' ? 'rotateX(-158deg)' : 'rotateX(158deg)';
@@ -691,8 +887,8 @@ function flipTo(direction){
 }
 function nextPage(){ flipTo('next'); }
 function prevPage(){ flipTo('prev'); }
-function tapRightZone(){ ((DATA.settings.pageDirection||'rtl')==='ltr') ? nextPage() : prevPage(); }
-function tapLeftZone(){ ((DATA.settings.pageDirection||'rtl')==='ltr') ? prevPage() : nextPage(); }
+function tapRightZone(){ ((SETTINGS.pageDirection||'rtl')==='ltr') ? nextPage() : prevPage(); }
+function tapLeftZone(){ ((SETTINGS.pageDirection||'rtl')==='ltr') ? prevPage() : nextPage(); }
 
 function pulseEdge(){
   const stage = document.getElementById('bookStage');
@@ -704,7 +900,7 @@ function pulseEdge(){
 /* toggle UI chrome on tap in the middle (not the side/edge zones) */
 document.getElementById('bookStage').addEventListener('click', (e)=>{
   const rect = e.currentTarget.getBoundingClientRect();
-  const orientation = DATA.settings.orientation || 'horizontal';
+  const orientation = SETTINGS.orientation || 'horizontal';
   if(orientation==='vertical'){
     const relY = (e.clientY - rect.top) / rect.height;
     if(relY > 0.30 && relY < 0.70){
@@ -739,7 +935,7 @@ document.getElementById('bookStage').addEventListener('click', (e)=>{
     const dy = touch.clientY - startY;
     const dt = Date.now() - startT;
     if(dt > 700) return;
-    const orientation = DATA.settings.orientation || 'horizontal';
+    const orientation = SETTINGS.orientation || 'horizontal';
     const THRESH = 40;
     if(orientation==='vertical'){
       if(Math.abs(dy) > THRESH && Math.abs(dy) > Math.abs(dx)){
@@ -755,14 +951,14 @@ document.getElementById('bookStage').addEventListener('click', (e)=>{
 
 /* ---------------- bookmark ---------------- */
 function updateRibbon(){
-  const isBookmarked = DATA.bookmark && DATA.bookmark.pageIndex === currentPageIndex;
+  const isBookmarked = CURRENT_BOOK.bookmark && CURRENT_BOOK.bookmark.pageIndex === currentPageIndex;
   document.getElementById('ribbonBtn').classList.toggle('active', !!isBookmarked);
 }
 function toggleBookmark(){
-  if(DATA.bookmark && DATA.bookmark.pageIndex === currentPageIndex){
-    DATA.bookmark = null;
+  if(CURRENT_BOOK.bookmark && CURRENT_BOOK.bookmark.pageIndex === currentPageIndex){
+    CURRENT_BOOK.bookmark = null;
   } else {
-    DATA.bookmark = { pageIndex: currentPageIndex };
+    CURRENT_BOOK.bookmark = { pageIndex: currentPageIndex };
   }
   persist();
   updateRibbon();
@@ -771,7 +967,7 @@ function toggleBookmark(){
 /* ---------------- chapter jump list ---------------- */
 function showChapterList(){
   const jump = document.getElementById('jumpList');
-  jump.innerHTML = DATA.chapters.map((ch,i)=>{
+  jump.innerHTML = CURRENT_BOOK.chapters.map((ch,i)=>{
     const firstPageIdx = pages.findIndex(p=>p.chapterIndex===i);
     return `<div class="chapter-card" style="border-right-color:var(--gold);" onclick="jumpToChapter(${firstPageIdx})">
       <div class="chapter-num">${toFa(i+1)}</div>
@@ -793,9 +989,9 @@ function openSettings(){
   requireUnlock(()=>{ doOpenSettings(); });
 }
 function doOpenSettings(){
-  document.getElementById('fontSizeRange').value = DATA.settings.fontSize;
-  document.getElementById('fontSizeLabel').textContent = toFa(DATA.settings.fontSize);
-  document.getElementById('lineHeightRange').value = DATA.settings.lineHeight;
+  document.getElementById('fontSizeRange').value = SETTINGS.fontSize;
+  document.getElementById('fontSizeLabel').textContent = toFa(SETTINGS.fontSize);
+  document.getElementById('lineHeightRange').value = SETTINGS.lineHeight;
   refreshSettingsUI();
   renderPwManageArea();
   document.getElementById('settingsOverlay').classList.add('active');
@@ -806,21 +1002,21 @@ function closeSettings(){
   if(readingActive){ paginateAll(); if(currentPageIndex>=pages.length) currentPageIndex=pages.length-1; renderCurrentPage(); }
 }
 function refreshSettingsUI(){
-  document.querySelectorAll('.theme-swatch').forEach(b=> b.classList.toggle('selected', b.dataset.theme===DATA.settings.theme));
-  document.querySelectorAll('#fontOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.font===DATA.settings.font));
-  document.querySelectorAll('#orientationOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.orientation===(DATA.settings.orientation||'horizontal')));
-  document.querySelectorAll('#pageDirOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.pagedir===(DATA.settings.pageDirection||'rtl')));
-  document.querySelectorAll('#alignOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.align===(DATA.settings.align||'right')));
+  document.querySelectorAll('.theme-swatch').forEach(b=> b.classList.toggle('selected', b.dataset.theme===SETTINGS.theme));
+  document.querySelectorAll('#fontOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.font===SETTINGS.font));
+  document.querySelectorAll('#orientationOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.orientation===(SETTINGS.orientation||'horizontal')));
+  document.querySelectorAll('#pageDirOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.pagedir===(SETTINGS.pageDirection||'rtl')));
+  document.querySelectorAll('#alignOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.align===(SETTINGS.align||'right')));
 }
 function setAlign(a){
-  DATA.settings.align = a;
-  persist();
+  SETTINGS.align = a;
+  persistSettings();
   document.documentElement.style.setProperty('--text-align', a);
   refreshSettingsUI();
 }
 function setPageDirection(d){
-  DATA.settings.pageDirection = d;
-  persist();
+  SETTINGS.pageDirection = d;
+  persistSettings();
   refreshSettingsUI();
 }
 
@@ -828,7 +1024,7 @@ function setPageDirection(d){
 let unlockedForSession = false;
 let pendingUnlockCallback = null;
 function requireUnlock(cb){
-  if(!DATA.settings.editPassword || unlockedForSession){ cb(); return; }
+  if(!SETTINGS.editPassword || unlockedForSession){ cb(); return; }
   pendingUnlockCallback = cb;
   document.getElementById('pwInput').value = '';
   document.getElementById('pwError').style.display = 'none';
@@ -837,7 +1033,7 @@ function requireUnlock(cb){
 }
 function submitPassword(){
   const val = document.getElementById('pwInput').value;
-  if(val === DATA.settings.editPassword){
+  if(val === SETTINGS.editPassword){
     unlockedForSession = true;
     document.getElementById('passwordOverlay').classList.remove('active');
     const cb = pendingUnlockCallback;
@@ -854,7 +1050,7 @@ function cancelPasswordPrompt(){
 function renderPwManageArea(){
   const area = document.getElementById('pwManageArea');
   if(!area) return;
-  if(DATA.settings.editPassword){
+  if(SETTINGS.editPassword){
     area.innerHTML = `
       <div style="color:#c7b48a;font-size:12.5px;margin-bottom:8px;">قفل فعال است. برای باز کردن تنظیمات و ویرایش فصل‌ها، رمز لازم است.</div>
       <div class="opt-row">
@@ -872,25 +1068,25 @@ function setNewPassword(){
   const field = document.getElementById('newPwField');
   const v = field ? field.value : '';
   if(!v){ return; }
-  DATA.settings.editPassword = v;
+  SETTINGS.editPassword = v;
   unlockedForSession = true;
-  persist();
+  persistSettings();
   renderPwManageArea();
 }
 function promptChangePassword(){
-  DATA.settings.editPassword = null;
-  persist();
+  SETTINGS.editPassword = null;
+  persistSettings();
   renderPwManageArea();
 }
 function clearEditPassword(){
-  DATA.settings.editPassword = null;
+  SETTINGS.editPassword = null;
   unlockedForSession = true;
-  persist();
+  persistSettings();
   renderPwManageArea();
 }
 function setOrientation(o){
-  DATA.settings.orientation = o;
-  persist();
+  SETTINGS.orientation = o;
+  persistSettings();
   const stage = document.getElementById('bookStage');
   if(stage) stage.setAttribute('data-orientation', o);
   refreshSettingsUI();
@@ -902,8 +1098,8 @@ function setOrientation(o){
   }
 }
 function setTheme(theme, skipRepaginate){
-  DATA.settings.theme = theme;
-  persist();
+  SETTINGS.theme = theme;
+  persistSettings();
   const colors = themeColors(theme);
   const reading = document.getElementById('reading');
   reading.classList.remove('theme-night','theme-sepia');
@@ -916,22 +1112,24 @@ function setTheme(theme, skipRepaginate){
   refreshSettingsUI();
 }
 function setFont(font){
-  DATA.settings.font = font; persist(); refreshSettingsUI();
+  SETTINGS.font = font; persistSettings(); refreshSettingsUI();
 }
 function setFontSize(v){
-  DATA.settings.fontSize = parseInt(v);
+  SETTINGS.fontSize = parseInt(v);
   document.getElementById('fontSizeLabel').textContent = toFa(v);
-  persist();
+  persistSettings();
 }
 function setLineHeight(v){
-  DATA.settings.lineHeight = parseInt(v);
-  persist();
+  SETTINGS.lineHeight = parseInt(v);
+  persistSettings();
 }
 
 /* ---------------- init ---------------- */
+migrateIfNeeded();
 applySettingsToRoot();
-setTheme(DATA.settings.theme, true);
-renderLibrary();
+setTheme(SETTINGS.theme, true);
+showScreen('bookshelf');
+renderBookshelf();
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
     navigator.serviceWorker.register('sw.js').catch(()=>{});
