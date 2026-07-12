@@ -26,6 +26,7 @@
     --title-font: 'Amiri', 'Noto Naskh Arabic', serif;
     --font-size: 20px;
     --line-height: 2.1;
+    --text-align: right;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
   html,body{
@@ -138,7 +139,7 @@
     box-shadow:0 6px 24px rgba(0,0,0,0.28);
     backface-visibility:hidden;
     transform-style:preserve-3d;
-    padding:26px 22px 20px;
+    padding:72px 22px 46px;
     overflow:hidden;
     transition:transform 0.55s cubic-bezier(.4,.1,.2,1);
   }
@@ -146,6 +147,7 @@
     font-family:var(--body-font); color:var(--text-col,var(--ink));
     font-size:var(--font-size); line-height:var(--line-height);
     white-space:pre-wrap; word-wrap:break-word;
+    text-align:var(--text-align, right);
   }
   .page-num{
     position:absolute; bottom:10px; left:0; right:0; text-align:center;
@@ -276,8 +278,8 @@
       <div class="page-layer" id="pageBehind"><div class="page-text" id="pageTextBehind"></div><div class="page-num" id="pageNumBehind"></div></div>
       <div class="page-layer" id="pageFront"><div class="page-text" id="pageTextFront"></div><div class="page-num" id="pageNumFront"></div></div>
       <div class="ribbon" id="ribbonBtn" onclick="toggleBookmark()"><span>🔖</span></div>
-      <div class="tap-zone tz-prev" id="tzPrev" onclick="prevPage()"><div class="tap-hint" id="prevHint">‹</div></div>
-      <div class="tap-zone tz-next" id="tzNext" onclick="nextPage()"><div class="tap-hint" id="nextHint">›</div></div>
+      <div class="tap-zone tz-prev" id="tzPrev" onclick="tapRightZone()"><div class="tap-hint" id="prevHint">‹</div></div>
+      <div class="tap-zone tz-next" id="tzNext" onclick="tapLeftZone()"><div class="tap-hint" id="nextHint">›</div></div>
     </div>
 
     <div class="read-bottombar" id="readBottombar">
@@ -323,6 +325,23 @@
     </div>
 
     <div class="sheet-group">
+      <label>جهت خواندن (برای حالت افقی)</label>
+      <div class="opt-row" id="pageDirOptRow">
+        <button class="opt-chip" data-pagedir="rtl" onclick="setPageDirection('rtl')">راست به چپ (فارسی)</button>
+        <button class="opt-chip" data-pagedir="ltr" onclick="setPageDirection('ltr')">چپ به راست (لاتین)</button>
+      </div>
+    </div>
+
+    <div class="sheet-group">
+      <label>چینش متن</label>
+      <div class="opt-row" id="alignOptRow">
+        <button class="opt-chip" data-align="right" onclick="setAlign('right')">راست‌چین</button>
+        <button class="opt-chip" data-align="center" onclick="setAlign('center')">وسط‌چین</button>
+        <button class="opt-chip" data-align="left" onclick="setAlign('left')">چپ‌چین</button>
+      </div>
+    </div>
+
+    <div class="sheet-group">
       <label>اندازه قلم: <span id="fontSizeLabel">۲۰</span></label>
       <input type="range" id="fontSizeRange" min="14" max="36" step="1" oninput="setFontSize(this.value)">
     </div>
@@ -330,6 +349,11 @@
     <div class="sheet-group">
       <label>فاصله خطوط</label>
       <input type="range" id="lineHeightRange" min="150" max="260" step="10" oninput="setLineHeight(this.value)">
+    </div>
+
+    <div class="sheet-group">
+      <label>قفل ویرایش (رمز عبور)</label>
+      <div id="pwManageArea"></div>
     </div>
 
     <div class="sheet-group">
@@ -346,6 +370,19 @@
   </div>
 </div>
 
+<!-- PASSWORD PROMPT OVERLAY -->
+<div class="confirm-overlay" id="passwordOverlay">
+  <div class="confirm-box">
+    <p style="margin-bottom:10px;">برای ورود، رمز عبور را وارد کنید</p>
+    <input id="pwInput" type="password" placeholder="رمز عبور" style="width:100%;padding:11px 12px;border-radius:10px;border:1px solid rgba(176,137,72,0.4);background:#221A12;color:var(--night-ink);font-size:15px;margin-bottom:8px;text-align:center;">
+    <p id="pwError" style="display:none;color:#e77;font-size:12.5px;margin:0 0 12px;">رمز اشتباه است</p>
+    <div class="confirm-buttons">
+      <button class="cancel" onclick="cancelPasswordPrompt()">انصراف</button>
+      <button class="danger" onclick="submitPassword()">ورود</button>
+    </div>
+  </div>
+</div>
+
 <!-- CONFIRM DIALOG -->
 <div class="confirm-overlay" id="confirmOverlay">
   <div class="confirm-box">
@@ -357,6 +394,7 @@
   </div>
 </div>
 
+
 <script>
 /* ---------------- Data layer ---------------- */
 const STORAGE_KEY = 'ketabman_data_v1';
@@ -366,7 +404,7 @@ function loadData(){
     const raw = localStorage.getItem(STORAGE_KEY);
     if(raw) return JSON.parse(raw);
   }catch(e){}
-  return { chapters: [], settings:{theme:'cream', font:'Amiri', fontSize:20, lineHeight:210, orientation:'horizontal'}, bookmark:null };
+  return { chapters: [], settings:{theme:'cream', font:'Amiri', fontSize:20, lineHeight:210, orientation:'horizontal', pageDirection:'rtl', align:'right', editPassword:null}, bookmark:null };
 }
 let DATA = loadData();
 
@@ -446,6 +484,9 @@ function closeConfirm(){ document.getElementById('confirmOverlay').classList.rem
 /* ---------------- Editor ---------------- */
 let editingId = null;
 function openEditor(id){
+  requireUnlock(()=>{ doOpenEditor(id); });
+}
+function doOpenEditor(id){
   editingId = id;
   const ch = id ? DATA.chapters.find(c=>c.id===id) : null;
   document.getElementById('editorHeading').textContent = id ? 'ویرایش فصل' : 'فصل جدید';
@@ -477,6 +518,7 @@ function applySettingsToRoot(){
   document.documentElement.style.setProperty('--font-size', DATA.settings.fontSize+'px');
   document.documentElement.style.setProperty('--line-height', (DATA.settings.lineHeight/100));
   document.documentElement.style.setProperty('--body-font', fontStackFor(DATA.settings.font));
+  document.documentElement.style.setProperty('--text-align', DATA.settings.align || 'right');
 }
 function fontStackFor(key){
   if(key==='Amiri') return "'Amiri','Noto Naskh Arabic',serif";
@@ -507,7 +549,7 @@ function paginateAll(){
   const padBottom = parseFloat(cs.paddingBottom) || 0;
   const pageWidth = Math.max(50, pageRect.width - padLeft - padRight);
   // reserve extra room at the bottom for the page-number label so text never collides with it
-  const pageHeight = Math.max(50, (pageRect.height - padTop - padBottom - 28) * 0.97);
+  const pageHeight = Math.max(50, (pageRect.height - padTop - padBottom - 10) * 0.97);
 
   const measurer = document.createElement('div');
   measurer.style.position='absolute';
@@ -619,12 +661,16 @@ function flipTo(direction){
   preloadBehind(pages[targetIndex]);
 
   let origin, angle;
+  const isRTL = (DATA.settings.pageDirection || 'rtl') === 'rtl';
   if(orientation==='vertical'){
     origin = direction==='next' ? 'center bottom' : 'center top';
     angle = direction==='next' ? 'rotateX(-158deg)' : 'rotateX(158deg)';
-  } else {
+  } else if(isRTL){
     origin = direction==='next' ? 'right center' : 'left center';
     angle = direction==='next' ? 'rotateY(-158deg)' : 'rotateY(158deg)';
+  } else {
+    origin = direction==='next' ? 'left center' : 'right center';
+    angle = direction==='next' ? 'rotateY(158deg)' : 'rotateY(-158deg)';
   }
 
   front.style.transformOrigin = origin;
@@ -645,6 +691,8 @@ function flipTo(direction){
 }
 function nextPage(){ flipTo('next'); }
 function prevPage(){ flipTo('prev'); }
+function tapRightZone(){ ((DATA.settings.pageDirection||'rtl')==='ltr') ? nextPage() : prevPage(); }
+function tapLeftZone(){ ((DATA.settings.pageDirection||'rtl')==='ltr') ? prevPage() : nextPage(); }
 
 function pulseEdge(){
   const stage = document.getElementById('bookStage');
@@ -699,7 +747,7 @@ document.getElementById('bookStage').addEventListener('click', (e)=>{
       }
     } else {
       if(Math.abs(dx) > THRESH && Math.abs(dx) > Math.abs(dy)){
-        if(dx < 0) nextPage(); else prevPage();
+        if(dx < 0) tapLeftZone(); else tapRightZone();
       }
     }
   }, {passive:true});
@@ -742,10 +790,14 @@ function jumpToChapter(pageIdx){
 
 /* ---------------- settings ---------------- */
 function openSettings(){
+  requireUnlock(()=>{ doOpenSettings(); });
+}
+function doOpenSettings(){
   document.getElementById('fontSizeRange').value = DATA.settings.fontSize;
   document.getElementById('fontSizeLabel').textContent = toFa(DATA.settings.fontSize);
   document.getElementById('lineHeightRange').value = DATA.settings.lineHeight;
   refreshSettingsUI();
+  renderPwManageArea();
   document.getElementById('settingsOverlay').classList.add('active');
 }
 function closeSettings(){
@@ -757,6 +809,84 @@ function refreshSettingsUI(){
   document.querySelectorAll('.theme-swatch').forEach(b=> b.classList.toggle('selected', b.dataset.theme===DATA.settings.theme));
   document.querySelectorAll('#fontOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.font===DATA.settings.font));
   document.querySelectorAll('#orientationOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.orientation===(DATA.settings.orientation||'horizontal')));
+  document.querySelectorAll('#pageDirOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.pagedir===(DATA.settings.pageDirection||'rtl')));
+  document.querySelectorAll('#alignOptRow .opt-chip').forEach(b=> b.classList.toggle('selected', b.dataset.align===(DATA.settings.align||'right')));
+}
+function setAlign(a){
+  DATA.settings.align = a;
+  persist();
+  document.documentElement.style.setProperty('--text-align', a);
+  refreshSettingsUI();
+}
+function setPageDirection(d){
+  DATA.settings.pageDirection = d;
+  persist();
+  refreshSettingsUI();
+}
+
+/* ---------------- edit lock (password) ---------------- */
+let unlockedForSession = false;
+let pendingUnlockCallback = null;
+function requireUnlock(cb){
+  if(!DATA.settings.editPassword || unlockedForSession){ cb(); return; }
+  pendingUnlockCallback = cb;
+  document.getElementById('pwInput').value = '';
+  document.getElementById('pwError').style.display = 'none';
+  document.getElementById('passwordOverlay').classList.add('active');
+  setTimeout(()=>{ const el=document.getElementById('pwInput'); if(el) el.focus(); }, 50);
+}
+function submitPassword(){
+  const val = document.getElementById('pwInput').value;
+  if(val === DATA.settings.editPassword){
+    unlockedForSession = true;
+    document.getElementById('passwordOverlay').classList.remove('active');
+    const cb = pendingUnlockCallback;
+    pendingUnlockCallback = null;
+    if(cb) cb();
+  } else {
+    document.getElementById('pwError').style.display = 'block';
+  }
+}
+function cancelPasswordPrompt(){
+  document.getElementById('passwordOverlay').classList.remove('active');
+  pendingUnlockCallback = null;
+}
+function renderPwManageArea(){
+  const area = document.getElementById('pwManageArea');
+  if(!area) return;
+  if(DATA.settings.editPassword){
+    area.innerHTML = `
+      <div style="color:#c7b48a;font-size:12.5px;margin-bottom:8px;">قفل فعال است. برای باز کردن تنظیمات و ویرایش فصل‌ها، رمز لازم است.</div>
+      <div class="opt-row">
+        <button class="opt-chip" onclick="promptChangePassword()">تغییر رمز</button>
+        <button class="opt-chip" onclick="clearEditPassword()">حذف قفل</button>
+      </div>`;
+  } else {
+    area.innerHTML = `
+      <div style="color:#c7b48a;font-size:12.5px;margin-bottom:8px;">قفل غیرفعال است. با تنظیم رمز، ورود به تنظیمات و ویرایش فصل‌ها نیاز به رمز خواهد داشت.</div>
+      <input id="newPwField" type="password" placeholder="یک رمز عبور وارد کنید" style="width:100%;padding:11px 12px;border-radius:10px;border:1px solid rgba(176,137,72,0.4);background:#221A12;color:var(--night-ink);font-size:15px;margin-bottom:8px;box-sizing:border-box;">
+      <button class="fab secondary" style="width:100%;" onclick="setNewPassword()">فعال‌سازی قفل</button>`;
+  }
+}
+function setNewPassword(){
+  const field = document.getElementById('newPwField');
+  const v = field ? field.value : '';
+  if(!v){ return; }
+  DATA.settings.editPassword = v;
+  unlockedForSession = true;
+  persist();
+  renderPwManageArea();
+}
+function promptChangePassword(){
+  DATA.settings.editPassword = null;
+  persist();
+  renderPwManageArea();
+}
+function clearEditPassword(){
+  DATA.settings.editPassword = null;
+  unlockedForSession = true;
+  persist();
+  renderPwManageArea();
 }
 function setOrientation(o){
   DATA.settings.orientation = o;
@@ -799,6 +929,7 @@ function setLineHeight(v){
 }
 
 /* ---------------- init ---------------- */
+applySettingsToRoot();
 setTheme(DATA.settings.theme, true);
 renderLibrary();
 if('serviceWorker' in navigator){
